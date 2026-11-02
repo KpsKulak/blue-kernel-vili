@@ -20,10 +20,10 @@ jobs:
       - name: Install Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y git ccache automake flex lzop bison \
-            bc build-essential zip curl zlib1g-dev g++-multilib \
-            libxml2-utils bzip2 libbz2-dev libssl-dev python3 libncurses5 \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git ccache automake flex lzop bison bc build-essential zip curl \
+            zlib1g-dev libxml2-utils bzip2 libbz2-dev libssl-dev python3 \
+            libncurses5 binutils-aarch64-linux-gnu
 
       - name: Download AOSP Clang
         run: |
@@ -48,12 +48,11 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # Configure base Snapdragon 888 defconfig
+          # Configure base Snapdragon 888 defconfig using clang
           make -j$(nproc --all) O=out \
             ARCH=arm64 \
             CC=clang \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
             LLVM=1 \
             LLVM_IAS=1 \
             vendor/lahaina-perf_defconfig
@@ -71,7 +70,6 @@ jobs:
             ARCH=arm64 \
             CC=clang \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
             LLVM=1 \
             LLVM_IAS=1 \
             Image dtbs
