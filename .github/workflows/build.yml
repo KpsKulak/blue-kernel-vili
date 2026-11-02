@@ -24,12 +24,9 @@ jobs:
             bc build-essential zip curl zlib1g-dev g++-multilib \
             libxml2-utils bzip2 libbz2-dev libssl-dev python3 libncurses5
 
-      - name: Download AOSP Clang (r450784d)
+      - name: Download AOSP Clang
         run: |
-          mkdir -p clang
-          curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-13.0.0_r0.13/clang-r450784d.tar.gz
-          tar -C clang/ -zxf clang-r450784d.tar.gz
-          rm clang-r450784d.tar.gz
+          git clone --depth=1 https://gitlab.com/tejassinggh/clang-r450784d.git clang
 
       - name: Clone LineageOS SM8350 (lineage-24.0)
         run: |
