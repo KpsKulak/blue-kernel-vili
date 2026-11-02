@@ -22,7 +22,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git ccache automake flex lzop bison \
             bc build-essential zip curl zlib1g-dev g++-multilib \
-            libxml2-utils bzip2 libbz2-dev libssl-dev python3 libncurses5
+            libxml2-utils bzip2 libbz2-dev libssl-dev python3 libncurses5 \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
       - name: Download AOSP Clang
         run: |
@@ -46,25 +47,34 @@ jobs:
           export PATH="${GITHUB_WORKSPACE}/clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CC=clang
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
-          # Defconfig for vili
-          make O=out vendor/lahaina-perf_defconfig
-          if [ -f arch/arm64/configs/vendor/xiaomi/sm8350.config ]; then
-            make O=out vendor/xiaomi/sm8350.config
-          fi
-
-          # Build Image and dtb targets
+          # Configure base Snapdragon 888 defconfig
           make -j$(nproc --all) O=out \
+            ARCH=arm64 \
             CC=clang \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
             LLVM=1 \
             LLVM_IAS=1 \
-            Image dtb
+            vendor/lahaina-perf_defconfig
+
+          # Merge Xiaomi board config if present
+          if [ -f arch/arm64/configs/vendor/xiaomi/sm8350.config ]; then
+            ARCH=arm64 ./scripts/kconfig/merge_config.sh -m -O out \
+              out/.config \
+              arch/arm64/configs/vendor/xiaomi/sm8350.config
+            make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
+          fi
+
+          # Build Image and DTBs
+          make -j$(nproc --all) O=out \
+            ARCH=arm64 \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            Image dtbs
 
       - name: Package with AnyKernel3
         run: |
