@@ -29,9 +29,9 @@ jobs:
         run: |
           git clone --depth=1 https://gitlab.com/tejassinggh/clang-r450784d.git clang
 
-      - name: Clone LineageOS SM8350 (lineage-24.0)
+      - name: Clone LineageOS SM8350 (Full Recursive)
         run: |
-          git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git -b lineage-24.0 kernel
+          git clone --depth=1 --recurse-submodules https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git -b lineage-24.0 kernel
 
       - name: Integrate KernelSU-Next & Set Brand
         run: |
@@ -41,14 +41,14 @@ jobs:
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/lahaina-perf_defconfig
           echo "CONFIG_OVERLAY_FS=y" >> arch/arm64/configs/vendor/lahaina-perf_defconfig
 
-      - name: Build Kernel Image & DTB
+      - name: Build Kernel Image & DTBs
         run: |
           cd kernel
           export PATH="${GITHUB_WORKSPACE}/clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # Base configuration
+          # 1. Base Snapdragon 888 config
           make -j$(nproc --all) O=out \
             ARCH=arm64 \
             CC=clang \
@@ -57,7 +57,7 @@ jobs:
             LLVM_IAS=1 \
             vendor/lahaina-perf_defconfig
 
-          # Merge Xiaomi configuration if present
+          # 2. Merge Xiaomi board config
           if [ -f arch/arm64/configs/vendor/xiaomi/sm8350.config ]; then
             ARCH=arm64 ./scripts/kconfig/merge_config.sh -m -O out \
               out/.config \
@@ -65,36 +65,37 @@ jobs:
             make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
           fi
 
-          # Compile Image and DTBs explicitly
+          # 3. Full build of kernel Image and device tree blobs
           make -j$(nproc --all) O=out \
             ARCH=arm64 \
             CC=clang \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LLVM=1 \
             LLVM_IAS=1 \
-            Image dtbs
+            Image.gz-dtb Image dtbs
 
-          # Verify Image was actually compiled
-          if [ ! -f out/arch/arm64/boot/Image ]; then
-            echo "ERROR: Kernel Image was not generated!"
+          # 4. Strict sanity check on kernel binary size
+          SIZE=$(stat -c%s "out/arch/arm64/boot/Image" 2>/dev/null || echo 0)
+          echo "Generated Image size: $SIZE bytes"
+          if [ "$SIZE" -lt 15000000 ]; then
+            echo "ERROR: Kernel Image is too small ($SIZE bytes), incomplete build!"
             exit 1
           fi
 
       - name: Package with AnyKernel3
         run: |
           git clone https://github.com/0mar99/AnyKernel3.git AK3
-          
-          # Copy compiled Image
+
+          # Copy Image
           cp kernel/out/arch/arm64/boot/Image AK3/
-          
-          # Find and concatenate/copy DTB if generated
-          if [ -f kernel/out/arch/arm64/boot/dtb ]; then
+
+          # Concatenate and package SM8350 DTBs
+          find kernel/out/arch/arm64/boot/dts/vendor/qcom/ -name "*.dtb" -exec cat {} + > AK3/dtb 2>/dev/null || true
+          if [ ! -s AK3/dtb ] && [ -f kernel/out/arch/arm64/boot/dtb ]; then
             cp kernel/out/arch/arm64/boot/dtb AK3/
-          elif [ -d kernel/out/arch/arm64/boot/dts/vendor/qcom ]; then
-            find kernel/out/arch/arm64/boot/dts/vendor/qcom -name "*.dtb" -exec cat {} + > AK3/dtb
           fi
 
-          # AnyKernel3 configuration for vili
+          # AnyKernel3 parameters for vili
           sed -i 's/device.name1=.*/device.name1=vili/' AK3/anykernel.sh
           sed -i 's/BLOCK=.*/BLOCK=boot;/' AK3/anykernel.sh
           sed -i 's/IS_SLOT_DEVICE=.*/IS_SLOT_DEVICE=auto;/' AK3/anykernel.sh
